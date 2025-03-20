@@ -1,4 +1,5 @@
 const std = @import("std");
+const File = std.fs.File;
 
 /// Path to root of Linux Kernel PWM interface.
 const PWM_ROOT_PATH = "/sys/class/pwm";
@@ -45,9 +46,9 @@ pub const Chip = struct {
     /// because it is accessed only once and its result is cached.
     const FilesOpened = struct {
         /// Handle to file `/sys/class/pwm/pwmchip{number}/export`.
-        export_: ?std.fs.File = null,
+        export_: ?File = null,
         /// Handle to file `/sys/class/pwm/pwmchip{number}/unexport`.
-        unexport: ?std.fs.File = null,
+        unexport: ?File = null,
     };
 
     /// Determines which one of the chips located at `/sys/class/pwm/*` to
@@ -92,7 +93,7 @@ pub const Chip = struct {
             chan.deinit();
         }
         inline for (std.meta.fields(FilesOpened)) |f| {
-            const maybe_file = @field(self.files_opened, f.name);
+            const maybe_file: ?File = @field(self.files_opened, f.name);
             if (maybe_file) |file_| file_.close();
         }
     }
@@ -155,8 +156,8 @@ pub const Chip = struct {
     fn file(
         self: *Chip,
         comptime location: std.meta.FieldEnum(FilesOpened),
-        flags: std.fs.File.OpenFlags,
-    ) !std.fs.File {
+        flags: File.OpenFlags,
+    ) !File {
         const name = @tagName(location);
         if (@field(self.files_opened, name)) |file_| return file_;
 
@@ -198,16 +199,16 @@ pub const Channel = struct {
     const FilesOpened = struct {
         /// Handle to file
         /// `/sys/class/pwm/pwmchip{chip.number}/pwm{number}/period`.
-        period: ?std.fs.File = null,
+        period: ?File = null,
         /// Handle to file
         /// `/sys/class/pwm/pwmchip{chip.number}/pwm{number}/duty_cycle`.
-        duty_cycle: ?std.fs.File = null,
+        duty_cycle: ?File = null,
         /// Handle to file
         /// `/sys/class/pwm/pwmchip{chip.number}/pwm{number}/polarity`.
-        polarity: ?std.fs.File = null,
+        polarity: ?File = null,
         /// Handle to file
         /// `/sys/class/pwm/pwmchip{chip.number}/pwm{number}/enable`.
-        enable: ?std.fs.File = null,
+        enable: ?File = null,
     };
 
     /// The parent chip of this channel.
@@ -243,13 +244,17 @@ pub const Channel = struct {
 
     /// Deinitializes the channel.
     pub fn deinit(self: *Channel) void {
+        self.disable() catch |err| std.debug.panic(
+            "couldn't disable PWM channel {} on chip {}: {}\n",
+            .{ self.number, self.chip.number, err },
+        );
         self.unexport() catch |err| std.debug.panic(
             "couldn't unexport PWM channel {} on chip {}: {}\n",
             .{ self.number, self.chip.number, err },
         );
 
         inline for (std.meta.fields(FilesOpened)) |f| {
-            const maybe_file = @field(self.files_opened, f.name);
+            const maybe_file: ?File = @field(self.files_opened, f.name);
             if (maybe_file) |file_| file_.close();
         }
         self.chip.channels[self.number] = null;
@@ -366,6 +371,9 @@ pub const Channel = struct {
     /// **Note:** can only be called after setting a frequency/period.
     fn setEnable(self: *Channel, value: bool) !void {
         const file_ = try self.file(.enable, .{ .mode = .read_write });
+        // Write negative first, because just after export it will not react to
+        // enable if was enabled before unexport.
+        _ = try file_.writer().print("{}", .{@intFromBool(!value)});
         _ = try file_.writer().print("{}", .{@intFromBool(value)});
     }
 
@@ -385,8 +393,8 @@ pub const Channel = struct {
     fn file(
         self: *Channel,
         comptime location: std.meta.FieldEnum(FilesOpened),
-        flags: std.fs.File.OpenFlags,
-    ) !std.fs.File {
+        flags: File.OpenFlags,
+    ) !File {
         const name = @tagName(location);
         if (@field(self.files_opened, name)) |file_| return file_;
 
@@ -440,7 +448,7 @@ pub const Polarity = enum {
 ///   `error.BufferTooSmall` will be returned.
 /// * `file` - handle to file to read from.
 /// * `base` - like in `std.fmt.parseInt`.
-fn readInt(comptime T: type, comptime bufsize: u8, file: std.fs.File, base: u8) !T {
+fn readInt(comptime T: type, comptime bufsize: u8, file: File, base: u8) !T {
     var buffer: [bufsize:0]u8 = undefined;
     const bytes_read = try file.readAll(&buffer);
     if (bytes_read == bufsize) return error.BufferTooSmall;

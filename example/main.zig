@@ -2,7 +2,7 @@ const std = @import("std");
 const pwm = @import("pwm");
 const signal = @cImport(@cInclude("signal.h"));
 
-const pwm_channel: u8 = 0; // gpio 13
+const pwm_channel: u8 = 1; // gpio 13
 const period_ms: u64 = 5000;
 const pwm_updates_per_period: u64 = 50;
 const pwm_min: f32 = 0.2;
