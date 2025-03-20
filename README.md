@@ -7,7 +7,7 @@ Control hardware PWM chips through Linux Kernel PWM sysfs interface.
 First add the `zig-pwm` dependency to your `build.zig.zon` via:
 
 ```sh
-zig fetch --save https://github.com/jostrzol/zig-pwm/archive/refs/tags/v0.0.1.tar.gz
+zig fetch --save https://github.com/jostrzol/zig-pwm/archive/refs/tags/v0.0.2.tar.gz
 ```
 
 You can change the library version in the link.
@@ -21,7 +21,7 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
 
     const zig_pwm = b.dependency("zig-pwm", .{ .target = target, .optimize = optimize });
-    
+
     const exe = b.addExecutable(.{
         .name = "2-motor-controller-zig",
         .root_source_file = b.path("./main.zig"),
